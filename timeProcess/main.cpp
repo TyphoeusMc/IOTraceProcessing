@@ -4,7 +4,8 @@
 #include <fstream>
 #include <sstream>
 #include <map>
-#define threshold 150      //选择记录了150条trace以上的进程
+#include <cmath>
+#define threshold 0      //选择记录了150条trace以上的进程
 #define searchStartPos 50
 
 using namespace std;
@@ -19,17 +20,42 @@ typedef struct traceInfo
 
 typedef struct processStats
 {
-    int rTime=0;
-    int wTime=0;
-    long double rSize=0;
-    long double wSize=0;
-    long double maxSizePerSec=0;
-    double maxTimePerSec=0;
+    double rTime=0;
+    double wTime=0;
+    long double rSizePSMax=0;
+    long double wSizePSMax=0;
+    long double ioSizePSMax=0;
+    double rTimePSMax=0;
+    double wTimePSMax=0;
+    double ioTimePSMax=0;
+    double aveRSize=0;
+    double aveWSize=0;
+    double aveIOSize=0;
+    double aveRTime=0;
+    double aveWTime=0;
+    double aveIOTime=0;
+    double stdVR=0;
+    double stdVW=0;
+    double stdVIO=0;
+    double stdVR_s=0;
+    double stdVW_s=0;
+    double stdVIO_s=0;
 }processStats;
+
+typedef struct processStatsPS
+{
+    double rTime=0;
+    double wTime=0;
+    double rSize=0;
+    double wSize=0;
+}processStatsPS;
+
+double upperBound=1;
 
 vector<string> allPath={
 "C:\\Users\\MartinPC\\Desktop\\data2\\text11400.txt",
-"C:\\Users\\MartinPC\\Desktop\\data2\\text11401.txt",
+"C:\\Users\\MartinPC\\Desktop\\data2\\text11401.txt"
+/*
 "C:\\Users\\MartinPC\\Desktop\\data2\\text11402.txt",
 "C:\\Users\\MartinPC\\Desktop\\data2\\text11403.txt",
 "C:\\Users\\MartinPC\\Desktop\\data2\\text11404.txt",
@@ -52,9 +78,10 @@ vector<string> allPath={
 "C:\\Users\\MartinPC\\Desktop\\data2\\text11421.txt",
 "C:\\Users\\MartinPC\\Desktop\\data2\\text11422.txt",
 "C:\\Users\\MartinPC\\Desktop\\data2\\text11423.txt"
+*/
 };
 
-void mergeResult(map<string,processStats> &finalResult, map<string,processStats> &resultPerSecond);
+void mergeResult(map<string,processStats> &finalResult, map<string,processStatsPS> &resultPerSecond);
 
 int main()
 {
@@ -83,8 +110,7 @@ int main()
     stringstream s2n;
     //最终结果
     map<string,processStats> finalResult;
-    map<string,processStats> resultPerSecond;
-    double upperBound=1;
+    map<string,processStatsPS> resultPerSecond;
 
     //设置精度
     s2n.precision(10);
@@ -155,6 +181,7 @@ int main()
     cout<<"selected pid listed bellow:"<<endl;
     //初始化所有有效的pid信息，并输出pid
     processStats stat;
+    processStatsPS statPS;
     for(pair<string,int> a:pidPool)
     {
         if(a.second>=threshold)
@@ -165,15 +192,6 @@ int main()
         }
     }
     //筛选数据，将trace数量小于一定值的进程的记录筛去,并提取目标特征
-    /*
-    1. ave read size
-    2. ave write size
-    3. read/write ratio
-    4. total r/w times
-    5. r/w density
-    6. io bandwith per second (size density)
-    7. io times per second
-    */
     //扫描trace
     for(pair<string,traceInfo> a:timeProcessedLines)
     {
@@ -192,7 +210,7 @@ int main()
         }
         //首先将没有加入的
         if(resultPerSecond.find(a.second.pid)==resultPerSecond.end())
-            resultPerSecond[a.second.pid]=stat;
+            resultPerSecond[a.second.pid]=statPS;
         if(a.second.isRead)
         {
             resultPerSecond[a.second.pid].rTime++;
@@ -218,17 +236,33 @@ int main()
     //print headers
     result<<"pid  ave_r_size  ave_w_size  r/w ratio  io_times  max_io/s  max_io_size/s  ave_io_times/s"<<endl;
     result.precision(10);
-    for(pair<string,processStats> p:finalResult)
+    for(auto &p:finalResult)
     {
-        result<<p.first<<",";
-        //处理分母为零的情况
-        result<<((p.second.rTime==0)?0:(p.second.rSize/p.second.rTime))<<",";
-        result<<((p.second.wTime==0)?0:(p.second.wSize/p.second.wTime))<<",";
-        //无穷值怎么处理？？
+        result<<p.second.aveRSize<<",";
+        result<<p.second.aveWSize<<",";
+        result<<p.second.aveIOSize<<",";
+        //无穷值怎么处理
         result<<((p.second.wTime==0)?100:(double(p.second.rTime)/p.second.wTime))<<",";
-        result<<p.second.rTime+p.second.wTime<<",";
-        result<<p.second.maxTimePerSec<<","<<p.second.maxSizePerSec<<",";
-        result<<double(p.second.rTime+p.second.wTime)/(22*60*60)<<endl;
+        result<<p.second.aveIOTime<<",";
+        result<<p.second.rSizePSMax<<",";
+        result<<p.second.wSizePSMax<<",";
+        result<<p.second.ioSizePSMax<<",";
+        result<<p.second.rTimePSMax<<",";
+        result<<p.second.wTimePSMax<<",";
+        result<<p.second.ioTimePSMax<<",";
+        //处理各个标准差
+        p.second.stdVIO=sqrt(p.second.stdVIO/(upperBound-1));
+        p.second.stdVIO_s=sqrt(p.second.stdVIO_s/(upperBound-1));
+        p.second.stdVR=sqrt(p.second.stdVR/(upperBound-1));
+        p.second.stdVR_s=sqrt(p.second.stdVR_s/(upperBound-1));
+        p.second.stdVW=sqrt(p.second.stdVW/(upperBound-1));
+        p.second.stdVW_s=sqrt(p.second.stdVW_s/(upperBound-1));
+        result<<p.second.stdVR<<",";
+        result<<p.second.stdVW<<",";
+        result<<p.second.stdVIO<<",";
+        result<<p.second.stdVR_s<<",";
+        result<<p.second.stdVW_s<<",";
+        result<<p.second.stdVIO_s<<endl;
     }
     result.close();
     cout<<"press any key to close"<<endl;
@@ -236,18 +270,75 @@ int main()
     return 0;
 }
 
-void mergeResult(map<string,processStats> &finalResult, map<string,processStats> &resultPerSecond)
+void mergeResult(map<string,processStats> &finalResult, map<string,processStatsPS> &resultPerSecond)
 {
-    for(pair<string,processStats> i:resultPerSecond)
+    double old_ave_r_s, old_ave_w_s, old_ave_io_s;
+    double old_ave_r_t, old_ave_w_t, old_ave_io_t;
+    double rTime=0;
+    double wTime=0;
+    double rSize=0;
+    double wSize=0;
+    for(auto &i:finalResult)
     {
-        finalResult[i.first].rSize+=i.second.rSize;
-        finalResult[i.first].wSize+=i.second.wSize;
-        finalResult[i.first].rTime+=i.second.rTime;
-        finalResult[i.first].wTime+=i.second.wTime;
-        if((i.second.rSize+i.second.wSize)>finalResult[i.first].maxSizePerSec)
-            finalResult[i.first].maxSizePerSec=i.second.rSize+i.second.wSize;
-        if((i.second.rTime+i.second.wTime)>finalResult[i.first].maxTimePerSec)
-            finalResult[i.first].maxTimePerSec=i.second.rTime+i.second.wTime;
+        rTime=wTime=rSize=wSize=0;
+        old_ave_r_s=i.second.aveRSize;
+        old_ave_w_s=i.second.aveWSize;
+        old_ave_io_s=i.second.aveIOSize;
+        old_ave_r_t=i.second.aveRTime;
+        old_ave_w_t=i.second.aveWTime;
+        old_ave_io_t=i.second.aveIOTime;
+        //该情况下当前秒内该进程有新数据
+        if(resultPerSecond.find(i.first)!=resultPerSecond.end())
+        {
+            rTime=resultPerSecond[i.first].rTime;
+            wTime=resultPerSecond[i.first].wTime;
+            rSize=resultPerSecond[i.first].rSize;
+            wSize=resultPerSecond[i.first].wSize;
+        }
+        i.second.rTime+=rTime;
+        i.second.wTime+=wTime;
+        //ave_r=ave_r+((inGet-ave_r)/inSeq)
+        //1.平均读大小
+        i.second.aveRSize+=(rSize-i.second.aveRSize)/upperBound;
+        //2.平均写大小
+        i.second.aveWSize+=(wSize-i.second.aveWSize)/upperBound;
+        //3.平均IO大小
+        i.second.aveIOSize+=(rSize+wSize-i.second.aveIOSize)/upperBound;
+        //5.平均IO次数（秒）
+        i.second.aveRTime+=(rTime-i.second.aveRTime)/upperBound;
+        i.second.aveWTime+=(wTime-i.second.aveWTime)/upperBound;
+        i.second.aveIOSize+=(rTime+wTime-i.second.aveIOTime)/upperBound;
+        //6.最大读大小
+        if(rSize>i.second.rSizePSMax)
+            i.second.rSizePSMax=rSize;
+        //7.最大写大小
+        if(wSize>i.second.wSizePSMax)
+            i.second.wSizePSMax=wSize;
+        //8.最大IO大小
+        if((rSize+wSize)>i.second.ioSizePSMax)
+            i.second.ioSizePSMax=rSize+wSize;
+        //9.最大读次数
+        if(rTime>i.second.rTimePSMax)
+            i.second.rTimePSMax=rTime;
+        //10.最大写次数
+        if(wTime>i.second.wTimePSMax)
+            i.second.wTimePSMax=wTime;
+        //11.最大IO次数
+        if((rTime+wTime)>i.second.ioTimePSMax)
+            i.second.ioTimePSMax=rTime+wTime;
+        //std_v_r=std_v_r+(inGet-ave_old)*(inGet-ave_r);
+        //12.每秒读次数的标准差
+        i.second.stdVR+=(rTime-old_ave_r_t)*(rTime-i.second.aveRTime);
+        //13.每秒写次数的标准差
+        i.second.stdVW+=(wTime-old_ave_w_t)*(wTime-i.second.aveWTime);
+        //14.每秒IO次数的标准差
+        i.second.stdVIO+=(rTime+wTime-old_ave_io_t)*(rTime+wTime-i.second.aveIOTime);
+        //15.每次读大小的标准差
+        i.second.stdVR_s+=(rSize-old_ave_r_s)*(rSize-i.second.aveRSize);
+        //16.每次写大小的标准差
+        i.second.stdVW_s+=(wSize-old_ave_w_s)*(wSize-i.second.aveWSize);
+        //17.每次IO大小的标准差
+        i.second.stdVIO_s+=(rSize+wSize-old_ave_io_s)*(rSize+wSize-i.second.aveIOSize);
     }
     resultPerSecond.clear();
 }
