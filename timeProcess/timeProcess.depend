@@ -1,0 +1,10 @@
+# depslib dependency file v1.0
+1556630345 source:c:\expfiles\bishe\timeprocess\main.cpp
+	<iostream>
+	<vector>
+	<string>
+	<fstream>
+	<sstream>
+	<algorithm>
+	<map>
+
