@@ -1,0 +1,6 @@
+# depslib dependency file v1.0
+1556549037 source:c:\expfiles\bishe\testcal\main.cpp
+	<iostream>
+	<vector>
+	<cmath>
+
