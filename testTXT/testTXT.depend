@@ -1,0 +1,7 @@
+# depslib dependency file v1.0
+1556108593 source:c:\expfiles\bishe\testtxt\main.cpp
+	<iostream>
+	<fstream>
+	<string>
+	<map>
+
