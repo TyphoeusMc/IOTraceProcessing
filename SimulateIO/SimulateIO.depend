@@ -1,0 +1,8 @@
+# depslib dependency file v1.0
+1557748442 source:c:\expfiles\bishe\simulateio\main.cpp
+	<iostream>
+	<vector>
+	<fstream>
+	<cstdlib>
+	<ctime>
+
