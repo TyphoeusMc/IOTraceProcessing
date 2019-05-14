@@ -1,12 +1,25 @@
 //本程序模拟多个监控摄像头的IO情况
+//ver 0.1 输出统计量
+/**
+1.记录时间占比
+2.平均记录长度
+3.平均间隔长度
+4.记录长度标准差
+5.间隔长度标准差
+6.记录次数
+7.最大事件长度
+8.最短事件长度
+*/
+
 #include <iostream>
 #include <vector>
 #include <fstream>
 #include <cstdlib>
 #include <ctime>
+#include <cmath>
 
-#define tracesNumber 20   //序列的数量
-#define traceLength 2500   //假定总序列长度为1天
+#define tracesNumber 300   //序列的数量
+#define traceLength 10000   //
 #define shortEventLowerBound 1
 #define shortEventUpperBound 10
 #define longEventLowerBound 11
@@ -26,6 +39,24 @@ bool variate = false;    //各次事件的发生的时间长度差别是否大（相差时间30%）
 int timeCounter = 0;    //总时间段之内的秒数计数
 int lastTime;
 
+typedef struct traceStats
+{
+    double eventRate=0;
+    double eventTime=0;
+    double aveEventTime=0;
+    double aveIntervalTime=0;
+    double oldAveEventTime=0;   //用于递归计算标准差
+    double oldAveIntervalTime=0;     //用于递归计算标准差
+    double stdV_eventTime=0;
+    double stdV_intTime=0;
+    double eventNumbers=0;
+    double intervalNumbers=0;
+    int maxEventLength=0;
+    int minEventLength=10000;
+}traceStats;
+
+void clearStat(traceStats &stat);
+
 int main()
 {
     ofstream result;
@@ -33,15 +64,18 @@ int main()
     ofstream tracePlot;
     tracePlot.open("C:\\Users\\MartinPC\\Desktop\\TraceCreated\\plot.txt");
     tracePlot<<"header"<<endl;
+    ofstream traceStatsFile;
+    traceStatsFile.open("C:\\Users\\MartinPC\\Desktop\\TraceCreated\\stats.txt");
+    traceStatsFile<<"eventRate,aveEventTime,aveIntervalTime,stdV_eventTime,stdV-intTime,eventNumbers,maxEventLength,minEventLength"<<endl;
     int timeLeft;
     int timeThisSection;
     int firstEventLength;
     int actualTime;
-    int totalSeconds;     //事件发生的总秒数
     srand((unsigned)time(NULL));
+    traceStats Stats;
     for(int trNumber=0; trNumber<tracesNumber; trNumber++)
     {
-        totalSeconds = 0;
+        clearStat(Stats);
         lastTime = 0;
         timeLeft = traceLength;
         timeThisSection = 0;
@@ -54,7 +88,7 @@ int main()
         else
             variate = (int)(random(0,101))>50?true:false;
         result<<longEvent<<longInterval<<variate<<endl;
-        result<<0<<",";
+        //result<<0<<",";
         while(timeLeft>0)
         {
             //先随机一个事件长度
@@ -95,13 +129,23 @@ int main()
             if(firstEventLength<0)
                 firstEventLength=timeThisSection;
             actualTime=(timeLeft>=timeThisSection)?(lastTime+timeThisSection):traceLength;
-            totalSeconds+=(timeLeft>=timeThisSection)?timeThisSection+1:timeLeft+1;
+
+            Stats.eventTime+=(timeLeft>=timeThisSection)?timeThisSection+1:timeLeft+1;
+            Stats.eventNumbers++;
+            Stats.oldAveEventTime=Stats.aveEventTime;
+            Stats.aveEventTime+=(timeThisSection-Stats.aveEventTime)/Stats.eventNumbers;
+            if(timeThisSection>Stats.maxEventLength)
+                Stats.maxEventLength=timeThisSection;
+            if(timeThisSection<Stats.minEventLength)
+                Stats.minEventLength=timeThisSection;
+            Stats.stdV_eventTime+=(timeThisSection-Stats.oldAveEventTime)*(timeThisSection-Stats.aveEventTime);
+
             for(int k=lastTime; k<=actualTime; k++)
                 tracePlot<<k<<",";
             lastTime=actualTime;
             //cout<<timeThisSection<<endl;
             //此处输出的是本次事件的结束时间
-            result<<actualTime<<",";
+            //result<<timeThisSection<<"--"<<actualTime<<",";
             timeLeft=(timeLeft>=timeThisSection)?timeLeft-timeThisSection:0;
             if(timeLeft<=0)
                 break;
@@ -124,11 +168,26 @@ int main()
             lastTime=actualTime;
             //此处输出的是下一次事件的开始时间
             //cout<<timeThisSection<<endl;
-            result<<actualTime<<",";
+
+            Stats.oldAveIntervalTime=Stats.aveIntervalTime;
+            Stats.intervalNumbers++;
+            Stats.aveIntervalTime+=(timeThisSection-Stats.aveIntervalTime)/Stats.intervalNumbers;
+            Stats.stdV_intTime+=(timeThisSection-Stats.oldAveIntervalTime)*(timeThisSection-Stats.aveIntervalTime);
+
+            //result<<timeThisSection<<"--"<<actualTime<<",";
             timeLeft=(timeLeft>=timeThisSection)?timeLeft-timeThisSection:0;
         }
+
+        //处理标准差
+        Stats.stdV_eventTime=sqrt(Stats.stdV_eventTime/Stats.eventNumbers);
+        Stats.stdV_intTime=sqrt(Stats.stdV_intTime/Stats.intervalNumbers);
+
+        Stats.eventRate=Stats.eventTime/traceLength;
+        traceStatsFile<<Stats.eventRate<<","<<Stats.aveEventTime<<","<<Stats.aveIntervalTime<<","<<Stats.stdV_eventTime<<",";
+        traceStatsFile<<Stats.stdV_intTime<<","<<Stats.eventNumbers<<","<<Stats.maxEventLength<<","<<Stats.minEventLength<<endl;
+
         tracePlot<<endl;
-        for(int k=0; k<totalSeconds; k++)
+        for(int k=0; k<Stats.eventTime; k++)
             tracePlot<<trNumber+1<<",";
         result<<endl;
         tracePlot<<endl;
@@ -137,10 +196,22 @@ int main()
     return 0;
 }
 
-
-
-
-
+void clearStat(traceStats &stat)
+{
+    stat.eventRate=0;
+    stat.eventTime=0;
+    stat.aveEventTime=0;
+    stat.aveIntervalTime=0;
+    stat.oldAveEventTime=0;
+    stat.oldAveIntervalTime=0;
+    stat.stdV_eventTime=0;
+    stat.stdV_intTime=0;
+    stat.eventNumbers=0;
+    stat.intervalNumbers=0;
+    stat.maxEventLength=0;
+    stat.minEventLength=10000;
+    return ;
+}
 
 
 
